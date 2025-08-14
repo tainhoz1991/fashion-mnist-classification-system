@@ -1,0 +1,67 @@
+{
+    "name": "FashionMinist_Exp",
+    "n_gpu": 1,
+
+    "model_arch": {
+        "type": "FashionMNISTModel",
+        "args": {
+            "hidden_size": 64
+        }
+    },
+    "data_loader": {
+        "type": "FashionMNISTDataLoader",
+        "args":{
+            "data_dir": "data/",
+            "batch_size": 64,
+            "shuffle": true,
+            "validation_split": 0.0,
+            "num_workers": 4
+        }
+    },
+    "optimizer": {
+        "type": "Adam",
+        "args":{
+            "lr": 0.001,
+            "weight_decay": 0,
+            "amsgrad": true
+        }
+    },
+    "loss": "nll_loss",
+    "metrics": [
+        "accuracy", "top_k_acc"
+    ],
+    "lr_scheduler": {
+        "type": "",
+        "args": {}
+    },
+    "trainer": {
+        "epochs": 10,
+
+        "save_dir": "saved/",
+        "save_period": 1,
+        "log_level": 2,
+
+        "monitor": "min val_loss",
+        "early_stop": 10,
+
+        "tensorboard": true
+    },
+    "transform": {
+    "type": "Compose",
+    "args": {
+        "transforms": [
+            {
+                "type": "ToTensor",
+                "args": {}
+            },
+            {
+                "type": "Normalize",
+                "args": {
+                    "mean": [0.2860],
+                    "std": [0.3205]
+                }
+            }
+        ]
+      }
+    }
+}
