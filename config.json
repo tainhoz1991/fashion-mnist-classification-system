@@ -1,5 +1,5 @@
 {
-    "name": "FashionMinist_Exp",
+    "name": "FashionMNIST_Exp",
     "n_gpu": 1,
 
     "model_arch": {

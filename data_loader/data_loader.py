@@ -5,7 +5,7 @@ from utils import calculate_mean_std
 
 class FashionMNISTDataLoader(DataLoaderBase):
     """
-        FashionMINIST data loading demo using BaseDataLoader
+        FashionMNIST data loading demo using BaseDataLoader
         """
 
     def __init__(self, data_dir, batch_size, shuffle=True, validation_split=0.0, num_workers=1, training=True,
