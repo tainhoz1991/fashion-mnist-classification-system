@@ -9,6 +9,8 @@ import model.metric as module_metric
 from config import ConfigParser
 from trainer import Trainer
 from utils import prepare_device
+import os
+from dotenv import load_dotenv
 
 SEED = 42
 torch.manual_seed(SEED)
@@ -65,6 +67,9 @@ def main(config):
 
 
 if __name__ == "__main__":
+    load_dotenv()
+    # print(f"DATABRICKS_HOST:: {os.getenv('DATABRICKS_HOST')}")
+
     # Define arguments that program allows
     args = argparse.ArgumentParser(description='PyTorch Template')
     args.add_argument('-c', '--config', default=None, type=str,
