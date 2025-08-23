@@ -25,5 +25,7 @@ jobs:                 # A workflow is made of jobs
             cd /home/ubuntu/projects/${{ github.event.repository.name }}
             source /opt/pytorch/bin/activate
             git pull origin main
-            python train.py -c config.json --save_dir /home/ubuntu/tensorflow/
+            pip install -r requirements.txt
+            tmux new -d -s training "python train.py -c config.json --save_dir /home/ubuntu/tensorflow/"
+            echo "Training started in background inside tmux with session name is training"
           command_timeout: 60m # Timeout for SSH command execution
