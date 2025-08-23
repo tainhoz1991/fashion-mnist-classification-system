@@ -19,7 +19,7 @@ jobs:                 # A workflow is made of jobs
           username: ubuntu                   # Default user for AWS Ubuntu AMI
           key: ${{ secrets.EC2_SSH_KEY }}    # Private SSH key (stored securely in GitHub)
           script: |                          # Commands that run on EC2
-            cd /projects
+            cd /home/ubuntu/projects
             source /opt/pytorch/bin/activate
             git pull origin main
-            python train.py -c config.json --save_dir home/ubuntu/tensorflow/
+            python train.py -c config.json --save_dir /home/ubuntu/tensorflow/
