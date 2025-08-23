@@ -18,7 +18,7 @@ jobs:                 # A workflow is made of jobs
           host: ${{ secrets.EC2_HOST }}      # EC2 public IP or DNS
           username: ubuntu                   # Default user for AWS Ubuntu AMI
           key: ${{ secrets.EC2_SSH_KEY }}    # Private SSH key (stored securely in GitHub)
-          timeout: 60m   # allow 60 minutes
+          timeout: 60m   # Timeout for SSH connection to host
           script: |                          # Commands that run on EC2
             export MLFLOW_TRACKING_URI=${{ vars.MLFLOW_TRACKING_URI }}
             export MLFLOW_EXPERIMENT_NAME=FashionMNIST-Exp
@@ -26,3 +26,4 @@ jobs:                 # A workflow is made of jobs
             source /opt/pytorch/bin/activate
             git pull origin main
             python train.py -c config.json --save_dir /home/ubuntu/tensorflow/
+          command_timeout: 60m # Timeout for SSH command execution
