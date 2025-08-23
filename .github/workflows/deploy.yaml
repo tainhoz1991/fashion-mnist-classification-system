@@ -20,6 +20,8 @@ jobs:                 # A workflow is made of jobs
           key: ${{ secrets.EC2_SSH_KEY }}    # Private SSH key (stored securely in GitHub)
           timeout: 60m   # allow 60 minutes
           script: |                          # Commands that run on EC2
+            export MLFLOW_TRACKING_URI=${{ vars.MLFLOW_TRACKING_URI }}
+            export MLFLOW_EXPERIMENT_NAME=FashionMNIST-Exp
             cd /home/ubuntu/projects/${{ github.event.repository.name }}
             source /opt/pytorch/bin/activate
             git pull origin main
