@@ -20,21 +20,21 @@ class FashionMNISTModel(ModelBase):
                       padding=1),
             nn.MaxPool2d(kernel_size=2)
         )
-        # self.conv_block_2 = nn.Sequential(
-        #     nn.Conv2d(in_channels=hidden_size,
-        #               out_channels=hidden_size,
-        #               kernel_size=3,
-        #               stride=1,
-        #               padding=1),
-        #     nn.ReLU(),
-        #     nn.Conv2d(in_channels=hidden_size,
-        #               out_channels=hidden_size,
-        #               kernel_size=3,
-        #               stride=1,
-        #               padding=1),
-        #     nn.ReLU(),
-        #     nn.MaxPool2d(kernel_size=2)
-        # )
+        self.conv_block_2 = nn.Sequential(
+            nn.Conv2d(in_channels=hidden_size,
+                      out_channels=hidden_size,
+                      kernel_size=3,
+                      stride=1,
+                      padding=1),
+            nn.ReLU(),
+            nn.Conv2d(in_channels=hidden_size,
+                      out_channels=hidden_size,
+                      kernel_size=3,
+                      stride=1,
+                      padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2)
+        )
         self.classifier = nn.Sequential(
             nn.Flatten(),
             nn.Linear(in_features=hidden_size * 14 * 14, out_features=output_size),
