@@ -8,7 +8,11 @@ from datetime import datetime
 from torchinfo import summary
 from mlflow.models import infer_signature
 import numpy as np
+from mlflow import MlflowClient
+from logger import MLflowTracker
 
+
+# @Todo: tracking dataset goes with every experiment
 class TrainerBase:
     """
     Base class for all trainers
@@ -18,8 +22,9 @@ class TrainerBase:
         self.config = config
 
         # set up mlflow tracking server
-        mlflow_tracker_server_url = os.getenv('MLFLOW_TRACKING_URI')
-        mlflow.set_tracking_uri(mlflow_tracker_server_url)
+        mlflow.set_tracking_uri(os.getenv('MLFLOW_TRACKING_URI'))
+        self.mlflow_tracker = MLflowTracker(model=model, classes=[])
+        # wandb.login()
 
         # initiate a logger name "trainer"
         self.logger = config.get_logger('trainer', config['trainer']['log_level'])
@@ -42,7 +47,7 @@ class TrainerBase:
 
         cfg_trainer = config['trainer']
         self.epochs = cfg_trainer['epochs']
-        self.save_period = cfg_trainer['save_period']
+        self.save_epoch = cfg_trainer['save_epoch']
         self.monitor = cfg_trainer.get('monitor', 'off')
 
         # configuration to monitor model performance and save best
@@ -82,12 +87,28 @@ class TrainerBase:
         """
         Full training logic
         """
-        mlflow.set_experiment(os.getenv("MLFLOW_EXPERIMENT_NAME"))
+        # === Experiment and run setup ===
+        mlflow_experiment = os.getenv("MLFLOW_EXPERIMENT_NAME", "DefaultExperiment")
+        mlflow.set_experiment(mlflow_experiment)
+
         username = os.getlogin()
         current_datetime = datetime.now()
         formatted_datetime = current_datetime.strftime("%Y-%m-%d-%H:%M:%S")
         runner = f"{username}---{formatted_datetime}"
 
+        # Optional: explicitly patch TensorBoard log dir if not default
+        # wandb.tensorboard.patch(root_logdir=self.config.save_dir, pytorch=True)
+
+        # W&B init: sync tensorboard logs, disable auto-MLflow integration to prevent extra runs
+        # wandb_run = wandb.init(
+        #     project=mlflow_experiment,
+        #     # sync_tensorboard=True,
+        #     id=f"{username}--{round(time.time() * 1000)}",
+        #     reinit=True,  # ensures W&B run is fresh each time
+        #     allow_val_change=True  # allows modifying run config without conflict
+        # )
+
+        # === MLflow run ===
         with mlflow.start_run(run_name=runner) as run:
             # Log model summary.
             summary_model_path = f"{self.config.save_dir}/model_summary.txt"
@@ -95,7 +116,13 @@ class TrainerBase:
                 f.write(str(summary(self.model)))
             mlflow.log_artifact(summary_model_path)
 
+            # Log experiment config
+            experiment_config_path = f"{self.config.save_dir}/config.json"
+            mlflow.log_artifact(experiment_config_path)
+
+            # Log parameters
             params = {
+                "run_id": run.info.run_id,
                 "epochs": self.epochs,
                 "learning_rate": self.optimizer.param_groups[0]['lr'],
                 "batch_size": self.config['data_loader']['args']['batch_size'],
@@ -109,6 +136,8 @@ class TrainerBase:
             not_improved_count = 0
             for epoch in range(self.start_epoch, self.epochs + 1):
                 result = self._train_epoch(epoch)
+                # @Todo: extract result to get information to build confusion matrix and learning curve
+                # use MLFlowTracker
 
                 # save logged information into log dict
                 log = {'epoch': epoch}
@@ -143,18 +172,60 @@ class TrainerBase:
                                          "Training stops.".format(self.early_stop))
                         break
 
-                if epoch % self.save_period == 0:
-                    self._save_checkpoint(run, mlflow, log, epoch, save_best=best)
+                if epoch % self.save_epoch == 0:
+                    self._save_checkpoint(mlflow, log, epoch, save_best=best)
 
-        ranked_checkpoints = mlflow.search_logged_models(
-            filter_string=f"source_run_id='{run.info.run_id}'",
-            order_by=[{"field_name": "metrics.accuracy", "ascending": False}],
-            output_format="list",
+            # log learning curve
+            self.mlflow_tracker.log_training_curves()
+
+        # Get the best model based on accuracy metric and register best model
+        experiment_id = mlflow.get_experiment_by_name(
+            os.getenv("MLFLOW_EXPERIMENT_NAME")
+        ).experiment_id
+        # Find high-performing models
+        model_df = mlflow.search_logged_models(
+            experiment_ids=[experiment_id],
+            filter_string=f"params.run_id = '{run.info.run_id}'",
         )
-        best_checkpoint = ranked_checkpoints[0]
-        self.logger.info("Best checkpoint: {}".format(best_checkpoint))
+        model_df["accuracy"] = model_df["metrics"].apply(_get_accuracy)
+        # Drop rows without accuracy (safety) and pick the best
+        model_df = model_df.dropna(subset=["accuracy"])
+        best_model = model_df.loc[model_df["accuracy"].idxmax()]
 
-    def _save_checkpoint(self, run, mlflow, log, epoch, save_best=False):
+        """
+        best_row.T return a series with rows:
+        artifact_location
+        creation_timestamp
+        experiment_id
+        last_updated_timestamp
+        metrics: List[Metric]
+        model_id
+        model_type
+        name
+        params: Dict[str, str]
+        source_run_id
+        status
+        status_message
+        tags: Dict[str, str]
+        """
+        best_model_name = best_model.T["name"]
+        # register model f"runs:/{run.info.run_id}/{model_name}
+        model_uri = f"runs:/{run.info.run_id}/{best_model_name}"
+
+        # code below for Databricks
+        # registered_model_name = self.config["mlflow"]["catalog"] + "." + f"MNISTModel-{run.info.run_id}"
+        registered_model_name = f"MNISTModel-{run.info.run_id}"
+        registered_model = mlflow.register_model(model_uri=model_uri, name=registered_model_name)
+        # set alias for model
+        client = MlflowClient()
+        # @Todo: alias will be configured in env: Dev, Stage, Production
+        client.set_registered_model_alias(registered_model.name, alias=self.config["environment"],
+                                          version=registered_model.version)
+
+        self.logger.info(f"Registered model name {registered_model.name} version {registered_model.version} ...")
+        # wandb_run.finish()
+
+    def _save_checkpoint(self, mlflow, log, epoch, save_best=False):
         """
         Saving checkpoints
 
@@ -176,26 +247,43 @@ class TrainerBase:
         # save model to mlflow tracking server
         logged_model = mlflow.pytorch.log_model(pytorch_model=self.model, name=f"model-epoch-{epoch}",
                                                 signature=self.signature)
-        mlflow.log_metric(key="loss", value=f"{log["loss"]:2f}",
-                          step=epoch, model_id=logged_model.model_id)
-        mlflow.log_metric(key="accuracy", value=f"{log["accuracy"]:2f}",
-                          step=epoch, model_id=logged_model.model_id)
-        self.logger.info("Saving checkpoint: {} ...".format(filename))
-        if save_best:
-            best_path = str(self.checkpoint_dir / 'model_best.pth')
-            torch.save(state, best_path)
-            # save best model to mlflow tracking server
-            logged_model = mlflow.pytorch.log_model(pytorch_model=self.model, name="model-best",
-                                                    signature=self.signature)
-            mlflow.log_metric(key="loss", value=f"{log["loss"]:2f}", step=epoch, model_id=logged_model.model_id)
-            mlflow.log_metric(key="accuracy", value=f"{log["accuracy"]:2f}",
-                              step=epoch, model_id=logged_model.model_id)
-            # register model
-            model_uri = f"runs:/{run.info.run_id}/model-best"
-            registered_model = mlflow.register_model(model_uri=model_uri, name="FashionMNISTModel")
-            self.logger.info(f"Registered model name {registered_model.name} version {registered_model.version} ...")
+        train_loss = f"{log["loss"]:2f}"
+        train_accuracy = f"{log["accuracy"]:2f}"
+        val_loss = f"{log['val_loss']:2f}" if "val_loss" in log else None
+        val_accuracy = f"{log['val_accuracy']:2f}" if "val_accuracy" in log else None
 
-            self.logger.info("Saving current best: model_best.pth ...")
+        self.mlflow_tracker.train_losses.append(train_loss)
+        self.mlflow_tracker.train_accs.append(train_accuracy)
+        self.mlflow_tracker.val_losses.append(val_loss)
+        self.mlflow_tracker.val_accs.append(val_accuracy)
+
+        mlflow.log_metrics(
+            {
+                "loss": train_loss,
+                "accuracy": train_accuracy,
+                "val_loss": val_loss,
+                "val_accuracy": val_accuracy,
+            },
+            step=epoch,
+            model_id=logged_model.model_id,
+        )
+        # mlflow.log_metric(key="loss", value=f"{log["loss"]:2f}",
+        #                   step=epoch, model_id=logged_model.model_id)
+        # mlflow.log_metric(key="accuracy", value=f"{log["accuracy"]:2f}",
+        #                   step=epoch, model_id=logged_model.model_id)
+        self.logger.info("Saving checkpoint: {} ...".format(filename))
+
+        # if save_best:
+        #     best_path = str(self.checkpoint_dir / 'model_best.pth')
+        #     torch.save(state, best_path)
+        #     # save best model to mlflow tracking server
+        #     logged_model = mlflow.pytorch.log_model(pytorch_model=self.model, name="model-best",
+        #                                             signature=self.signature)
+        #     mlflow.log_metric(key="loss", value=f"{log["loss"]:2f}", step=epoch, model_id=logged_model.model_id)
+        #     mlflow.log_metric(key="accuracy", value=f"{log["accuracy"]:2f}",
+        #                       step=epoch, model_id=logged_model.model_id)
+        #
+        #     self.logger.info("Saving current best: model_best.pth ...")
 
     def _resume_checkpoint(self, resume_path):
         """
@@ -223,3 +311,11 @@ class TrainerBase:
             self.optimizer.load_state_dict(checkpoint['optimizer'])
 
         self.logger.info("Checkpoint loaded. Resume training from epoch {}".format(self.start_epoch))
+
+
+# Extract accuracy value from the metrics list
+def _get_accuracy(metrics_list):
+    for m in metrics_list:  # metrics_list is a list of Metric objects
+        if m.key == "accuracy":
+            return m.value
+    return None

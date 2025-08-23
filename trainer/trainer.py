@@ -18,6 +18,7 @@ class Trainer(TrainerBase):
         self.config = config
         self.device = device
         self.data_loader = data_loader
+        self.classes = data_loader.dataset.classes
         if batch_len is None:
             # epoch-based training
             self.batch_len = len(self.data_loader)
@@ -44,7 +45,7 @@ class Trainer(TrainerBase):
         self.valid_data_loader = valid_data_loader
         self.do_validation = self.valid_data_loader is not None
         self.lr_scheduler = lr_scheduler
-        self.log_step = int(np.sqrt(data_loader.batch_size))
+        self.log_batch = int(np.sqrt(data_loader.batch_size))
 
         # set up tracking metrics based on list of metric functions in model.metric
         self.train_metrics = MetricTracker('loss', *[m.__name__ for m in self.metric_fn_list], writer=self.writer)
@@ -59,6 +60,7 @@ class Trainer(TrainerBase):
         """
         self.model.train()
         self.train_metrics.reset()
+        self.mlflow_tracker.classes = self.classes
 
         # traverse data_loader list
         for batch_idx, (input, target) in enumerate(self.data_loader):
@@ -77,7 +79,7 @@ class Trainer(TrainerBase):
             for met in self.metric_fn_list:
                 self.train_metrics.update(met.__name__, met(output, target))
 
-            if batch_idx % self.log_step == 0:
+            if batch_idx % self.log_batch == 0:
                 self.logger.debug('Train Epoch: {} {} Loss: {:.6f}'.format(
                     epoch, self._progress(batch_idx), loss.item()))
                 self.writer.add_image('input', make_grid(input.cpu(), nrow=8, normalize=True))
@@ -120,7 +122,7 @@ class Trainer(TrainerBase):
                     self.valid_metrics.update(met.__name__, met(output, target))
                 self.writer.add_image('input', make_grid(data.cpu(), nrow=8, normalize=True))
 
-        # add histogram of model parameters to the tensorboard
+        # add histogram of model parameters to the tensorboard, for example: name=classifier.1.bias; p=[]
         for name, p in self.model.named_parameters():
             self.writer.add_histogram(name, p, bins='auto')
 

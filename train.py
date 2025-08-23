@@ -9,8 +9,9 @@ import model.metric as module_metric
 from config import ConfigParser
 from trainer import Trainer
 from utils import prepare_device
-import os
 from dotenv import load_dotenv
+import mlflow
+import os
 
 SEED = 42
 torch.manual_seed(SEED)
@@ -18,13 +19,11 @@ torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 np.random.seed(SEED)
 
-
-# config.init_obj function is used to initiate an instance
 def main(config):
     logger = config.get_logger('train')
 
     # initiate data_loader instances from values of config
-    data_loader = config.init_obj('data_loader', module_data)
+    data_loader = config.init_obj('data_loader', module_data, config=config['transform'])
 
     # create a validation data set
     valid_data_loader = data_loader.split_validation()
@@ -86,7 +85,8 @@ if __name__ == "__main__":
     CustomArgs = collections.namedtuple('CustomArgs', 'flags type target')
     options = [
         CustomArgs(['--lr', '--learning_rate'], type=float, target='optimizer;args;lr'),
-        CustomArgs(['--bs', '--batch_size'], type=int, target='data_loader;args;batch_size')
+        CustomArgs(['--bs', '--batch_size'], type=int, target='data_loader;args;batch_size'),
+        CustomArgs(['--s', '--save_dir'], type=str, target='trainer;save_dir')
     ]
 
     # build a ConfigParser which keeps all information to initiate classes like such as Model, DataLoader and functions
