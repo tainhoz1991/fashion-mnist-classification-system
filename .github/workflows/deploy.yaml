@@ -1,0 +1,25 @@
+name: Deploy to EC2   # Name of the workflow
+
+on:                   # Event triggers
+  push:               # Run this workflow on "git push"
+    branches: [ "main" ]  # Only when pushing to main branch
+
+jobs:                 # A workflow is made of jobs
+  deploy:             # Name of the job (you can call it anything)
+    runs-on: ubuntu-latest   # Runner environment (GitHub-hosted Ubuntu VM)
+
+    steps:            # Steps inside the job
+      - name: Checkout   # Step name
+        uses: actions/checkout@v4   # GitHub action to pull your repo code into the runner
+
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.0.3   # External action for SSH
+        with:            # Inputs required by the ssh-action
+          host: ${{ secrets.EC2_HOST }}      # EC2 public IP or DNS
+          username: ubuntu                   # Default user for AWS Ubuntu AMI
+          key: ${{ secrets.EC2_SSH_KEY }}    # Private SSH key (stored securely in GitHub)
+          script: |                          # Commands that run on EC2
+            cd /projects
+            source /opt/pytorch/bin/activate
+            git pull origin main
+            python train.py -c config.json --save_dir home/ubuntu/tensorflow/
