@@ -37,7 +37,7 @@ class FashionMNISTModel(ModelBase):
         )
         self.classifier = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(in_features=hidden_size * 14 * 14, out_features=output_size),
+            nn.Linear(in_features=hidden_size * 7 * 7, out_features=output_size),
         )
 
     def forward(self, x):
