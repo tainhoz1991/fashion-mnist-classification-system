@@ -18,6 +18,7 @@ jobs:                 # A workflow is made of jobs
           host: ${{ secrets.EC2_HOST }}      # EC2 public IP or DNS
           username: ubuntu                   # Default user for AWS Ubuntu AMI
           key: ${{ secrets.EC2_SSH_KEY }}    # Private SSH key (stored securely in GitHub)
+          timeout: 60m   # allow 60 minutes
           script: |                          # Commands that run on EC2
             cd /home/ubuntu/projects/${{ github.event.repository.name }}
             source /opt/pytorch/bin/activate

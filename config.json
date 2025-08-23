@@ -35,7 +35,7 @@
     "args": {}
   },
   "trainer": {
-    "epochs": 5,
+    "epochs": 4,
     "save_dir": "saved/",
     "save_epoch": 1,
     "log_level": 2,
